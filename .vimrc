@@ -5,10 +5,10 @@ syntax on
 set nocompatible
 set showcmd
 set ruler " Always show current position
-"set cul   " highlight current line
+set cul   " highlight current line
 set number
 set history=2000   " Sets how many lines of history VIM has to remember
-"set mouse=a
+set mouse=a
 set clipboard+=unnamed           " share clipboard with windows
 set autochdir                    " auto change windows cwd to file's dir
 "set autowrite                   " auto save file
@@ -37,12 +37,18 @@ map <leader>tree :NERDTreeToggle<CR>
 map <leader>undo :UndotreeToggle<CR>
 "" open indent line
 map <leader>line :IndentLinesToggle<CR>
+" Use CTRL-S for saving, also in Insert mode
+nmap <C-s> :w<CR>
+vmap <C-s> <ESC>:w<CR>
+imap <C-s> <ESC>:w<CR>li
+
 
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " file type
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 filetype on
 filetype plugin indent on
+
 
 
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
@@ -58,11 +64,14 @@ set magic      "  For regular expressions turn magic on
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " space and tab and indent
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-"set autoindent
-"set smartindent
+set autoindent
+set smartindent
 set tabstop=4    "  1 tab == 4 spaces
 set shiftwidth=4 "  1 tab == 4 spaces
 set expandtab    "  Use spaces instead of tabs
+"" show ALL white spaces as dot
+set listchars=trail:·
+set list
 
 
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
@@ -78,6 +87,15 @@ autocmd BufReadPost *
      \ if line("'\"") > 0 && line("'\"") <= line("$") |
      \   exe "normal! g`\"" |
      \ endif
+
+
+
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+" set pathogen
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+" execute pathogen#infect()
+
+
 
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " set NERDTree
@@ -135,6 +153,13 @@ let g:jedi#documentation_command    = "K"
 let g:jedi#usages_command           = "<leader>n"
 let g:jedi#completions_command      = "<C-Space>"
 let g:jedi#rename_command           = "<leader>rname"
+
+
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+" set tabular
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+"let g:tabular_loaded = 1
+
 
 
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
@@ -207,6 +232,7 @@ func SetTitle()
 "after creating new file, go to the end of the file
 endfunc
 autocmd BufNewFile * normal G
+
 
 
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
