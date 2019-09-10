@@ -1,0 +1,12 @@
+*.pyc
+*.log
+*.csv
+*.txt
+*.out
+*.crt
+*.key
+*.p12
+*.conf
+pki/
+__pycache__/
+config.py

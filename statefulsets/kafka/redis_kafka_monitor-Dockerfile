@@ -1,0 +1,7 @@
+FROM registry.cn-hangzhou.aliyuncs.com/daianla/k8skafka:v1
+
+RUN apt-get update \
+&& apt-get install python3-pip tzdata --no-install-recommends -y \
+&& pip3 install redis requests && rm -rf /var/lib/apt/lists/*
+
+ADD *.py /

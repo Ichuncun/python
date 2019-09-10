@@ -1,0 +1,248 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval:     15s
+      evaluation_interval: 15s
+    rule_files:
+    - /etc/prometheus/rules.yml
+    alerting:
+      alertmanagers:
+        - static_configs:
+          - targets: ["alertmanager:9093"]
+    scrape_configs:
+    - job_name: 'kubernetes-apiservers'
+      kubernetes_sd_configs:
+      - role: endpoints
+      scheme: https
+      tls_config:
+        ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+      bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+      relabel_configs:
+      - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+        action: keep
+        regex: default;kubernetes;https
+    - job_name: 'kubernetes-nodes'
+      kubernetes_sd_configs:
+      - role: node
+      scheme: https
+      tls_config:
+        ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+      bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+      relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
+      - target_label: __address__
+        replacement: kubernetes.default.svc
+      - source_labels: [__meta_kubernetes_node_name]
+        regex: (.+)
+        target_label: __metrics_path__
+        replacement: /api/v1/nodes/${1}/proxy/metrics
+    - job_name: 'kubernetes-cadvisor'
+      scheme: https
+      tls_config:
+        ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+      bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+      kubernetes_sd_configs:
+      - role: node
+      relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
+      - target_label: __address__
+        replacement: kubernetes.default.svc
+      - source_labels: [__meta_kubernetes_node_name]
+        regex: (.+)
+        target_label: __metrics_path__
+        replacement: /api/v1/nodes/${1}/proxy/metrics/cadvisor
+    - job_name: 'kubernetes-service-endpoints'
+      kubernetes_sd_configs:
+      - role: endpoints
+      relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name]
+        action: keep
+        regex: kube-state-metrics
+      - source_labels: [__meta_kubernetes_namespace]
+        action: replace
+        target_label: kubernetes_namespace
+      - source_labels: [__meta_kubernetes_service_name]
+        action: replace
+        target_label: kubernetes_name
+  rules.yml: |
+    groups:
+    - name: base-rule
+      rules:
+      - alert: InstanceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          team: node
+          severity: page
+        annotations:
+          description: "{{$labels.instance}} {{$labels.job}} is Down"
+      - alert: Nodes CPU overload
+        expr: sum(rate(container_cpu_usage_seconds_total{id="/"}[1m])) by(kubernetes_io_hostname) / sum(machine_cpu_cores) by(kubernetes_io_hostname) * 100 > 60
+        for: 1m
+        labels:
+          team: node
+          severity: warning
+        annotations:
+          description: "{{$labels.kubernetes_io_hostname}} CPU current value is: {{$value}}%"
+      - alert: Nodes memory overload
+        expr: sum(container_memory_working_set_bytes{id="/"}) by(kubernetes_io_hostname) / sum(machine_memory_bytes) by(kubernetes_io_hostname) * 100 > 97
+        for: 1m
+        labels:
+          team: node
+          severity: warning
+        annotations:
+          description: "{{$labels.kubernetes_io_hostname}} memory overload current value is: {{$value}}%"
+      - alert: Nodes device overload
+        expr: sum(container_fs_usage_bytes{device=~"^/dev/.*$",id="/"}) by(kubernetes_io_hostname,device) / sum(container_fs_limit_bytes{device=~"^/dev/.*$",id="/"}) by(kubernetes_io_hostname,device) * 100 > 90
+        for: 1m
+        labels:
+          team: node
+          severity: warning
+        annotations:
+          description: "{{$labels.kubernetes_io_hostname}} device {{$labels.device}} current value is: {{$value}}%"
+      - alert: Pods CPU overload
+        expr: sum(rate(container_cpu_usage_seconds_total{container_name!="POD",image!=""}[1m])) by (namespace,container,pod) * 100 > 90
+        for: 1m
+        labels:
+          team: Containers
+          severity: warning
+        annotations:
+          description: "{{$labels.namespace}}/{{$labels.container}} CPU current value is: {{$value}}%"
+      - alert: Pods memory overload
+        expr: sum(container_memory_working_set_bytes{container_name!="POD",image!=""}) by(namespace,container,pod) / 1024 / 1024 / 1024 > 1.5
+        for: 1m
+        labels:
+          team: Containers
+          severity: warning
+        annotations:
+          description: "{{$labels.namespace}}/{{$labels.container}} memory current value is: {{$value}}G"
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  - nodes/proxy
+  - services
+  - endpoints
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - extensions
+  resources:
+  - ingresses
+  verbs:
+  - get
+  - list
+  - watch
+- nonResourceURLs:
+  - /metrics
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prometheus
+subjects:
+- kind: ServiceAccount
+  name: prometheus
+  namespace: default
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: prometheus
+  name: prometheus
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 9090
+  selector:
+    app: prometheus
+  type: NodePort
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+  labels:
+    name: prometheus-deployment
+  name: prometheus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      containers:
+      - args:
+        - --config.file=/etc/prometheus/prometheus.yml
+        - --storage.tsdb.path=/prometheus
+        - --storage.tsdb.retention.time=24h
+        command:
+        - /bin/prometheus
+        env:
+        - name: TZ
+          value: Asia/Shanghai
+        image: prom/prometheus:v2.9.2
+        imagePullPolicy: IfNotPresent
+        name: prometheus
+        ports:
+        - containerPort: 9090
+          protocol: TCP
+        resources:
+          limits:
+            cpu: 500m
+            memory: 2500Mi
+          requests:
+            cpu: 100m
+            memory: 100Mi
+        volumeMounts:
+        - mountPath: /prometheus
+          name: data
+        - mountPath: /etc/prometheus
+          name: config-volume
+      restartPolicy: Always
+      serviceAccountName: prometheus
+      volumes:
+      - emptyDir: {}
+        name: data
+      - configMap:
+          defaultMode: 420
+          name: prometheus-config
+        name: config-volume

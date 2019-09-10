@@ -1,0 +1,16 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: youla-ingress
+  annotations:
+    #kubernetes.io/ingress.class: nginx
+    nginx.org/server-tokens: false
+spec:
+  rules:
+  - host: test.daianla.cn
+    http:
+      paths:
+      - path: /loan-apply-service
+        backend:
+          serviceName: loan-apply-service
+          servicePort: 80

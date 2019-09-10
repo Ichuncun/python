@@ -1,0 +1,120 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager
+data:
+  config.yml: |-
+    global:
+      resolve_timeout: 2m
+      wechat_api_url: 'https://qyapi.weixin.qq.com/cgi-bin/'
+      wechat_api_secret: 'QCwW6l-nErLw0zfFdXuTenSHv_adqEI7-Y1XMgapGNU'
+      wechat_api_corp_id: 'ww829dd4caba64a4d2'
+    templates:
+    - '/etc/alertmanager-templates/*.tmpl'
+    route:
+      group_by: ['alertname', 'cluster', 'service']
+      group_wait: 30s
+      group_interval: 10s
+      repeat_interval: 6h
+      receiver: 'wechat_alert'
+    receivers:
+    - name: 'wechat_alert'
+      wechat_configs:
+      - send_resolved: true
+        to_user: 'WuChunMing'
+        to_party: ''
+        to_tag: ''
+        agent_id: '1000002'
+        corp_id: 'ww829dd4caba64a4d2'
+        api_secret: 'QCwW6l-nErLw0zfFdXuTenSHv_adqEI7-Y1XMgapGNU'
+        message: '{{ template "wechat.default.message" . }}'
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-templates
+data:
+  default.tmpl: |
+    {{ define "wechat.default.message" }}{{ range .Alerts }}
+    告警状态：{{ .Status }}
+    告警详情: {{ .Annotations.description }}
+    触发时间: {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+    {{ end }}{{ end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    prometheus.io/path: /metrics
+    prometheus.io/scrape: "true"
+  labels:
+    name: alertmanager
+  name: alertmanager
+spec:
+  ports:
+  - name: alertmanager
+    port: 9093
+    protocol: TCP
+    targetPort: 9093
+  selector:
+    app: alertmanager
+  type: ClusterIP
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+  labels:
+    app: alertmanager
+  name: alertmanager
+spec:
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: alertmanager
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: alertmanager
+      name: alertmanager
+    spec:
+      containers:
+      - args:
+        - --config.file=/etc/alertmanager/config.yml
+        - --storage.path=/alertmanager
+        env:
+        - name: TZ
+          value: Asia/Shanghai
+        image: prom/alertmanager:v0.17.0
+        imagePullPolicy: IfNotPresent
+        name: alertmanager
+        ports:
+        - containerPort: 9093
+          name: alertmanager
+          protocol: TCP
+        volumeMounts:
+        - mountPath: /etc/alertmanager
+          name: config-volume
+        - mountPath: /etc/alertmanager-templates
+          name: templates-volume
+        - mountPath: /alertmanager
+          name: alertmanager
+      restartPolicy: Always
+      volumes:
+      - configMap:
+          defaultMode: 420
+          name: alertmanager
+        name: config-volume
+      - configMap:
+          defaultMode: 420
+          name: alertmanager-templates
+        name: templates-volume
+      - emptyDir: {}
+        name: alertmanager

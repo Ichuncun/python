@@ -1,0 +1,25 @@
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: redis-kafka-monitor
+spec:
+  schedule: "0 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: redis-kafka-monitor
+            image: registry.cn-hangzhou.aliyuncs.com/daianla/redis-kafka-monitor:v3
+            args:
+            - /usr/bin/python3
+            - RedisKafkaMonitor.py
+            - ${KAFKA_ADDRS}
+            env:
+            - name: PYTHONIOENCODING
+              value: utf-8
+            - name: KAFKA_ADDRS
+              value: kafka-0.kafka-svc.zhonggu.svc.cluster.local:9093,kafka-1.kafka-svc.zhonggu.svc.cluster.local:9093,kafka-2.kafka-svc.zhonggu.svc.cluster.local:9093 
+          imagePullSecrets:
+          - name: kube-registry
+          restartPolicy: Never

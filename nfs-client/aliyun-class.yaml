@@ -1,0 +1,12 @@
+kind: StorageClass
+apiVersion: storage.k8s.io/v1beta1
+metadata:
+  name: alicloud-disk-ssd-beijing-b
+provisioner: alicloud/disk
+reclaimPolicy: Retain
+parameters:
+  type: cloud_ssd
+  regionid: cn-beijing
+  zoneid: cn-beijing-b
+  fstype: "ext4"
+  readonly: "false"

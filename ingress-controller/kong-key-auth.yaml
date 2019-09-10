@@ -1,0 +1,20 @@
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: key-auth
+plugin: key-auth
+---
+apiVersion: configuration.konghq.com/v1
+kind: KongConsumer
+metadata:
+  name: harry
+username: harry
+---
+apiVersion: configuration.konghq.com/v1
+kind: KongCredential
+metadata:
+  name: harry-apikey
+consumerRef: harry
+type: key-auth
+#config:
+#  key: sooper-secret-key

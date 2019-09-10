@@ -1,0 +1,11 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: default 
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: alicloud-disk-ssd-beijing-b
+  resources:
+    requests:
+      storage: 20Gi
