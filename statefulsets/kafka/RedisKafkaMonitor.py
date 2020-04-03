@@ -3,15 +3,16 @@
 
 import re
 import sys
-from config import log
+import logging
 from config import send_msg
 from config import get_redis
 from subprocess import Popen, PIPE
 
+logger = logging.getLogger(__file__)
+
 KAFKA_QUEUE_SIZE = 100
 REDIS_QUEUE_SIZE = 1000000
 SEND_USERS = '@all'
-
 
 class RedisKafkaMonitor(object):
 
@@ -30,7 +31,7 @@ class RedisKafkaMonitor(object):
         for i in p.stdout.readlines():
             if not re.search('\d|\.', bytes.decode(i)):
                 self.consumers.append(bytes.decode(i).strip())
-        log.info(self.consumers)
+        logger.info(self.consumers)
         for consumer in self.consumers:
             if consumer == 'loanAudit' or consumer == 'reportStatistics':
                 continue
@@ -40,10 +41,10 @@ class RedisKafkaMonitor(object):
                 # [u'user.login.notice.v4', u'1', u'36085', u'47513', u'11428', u'-', u'-', u'-']
                 if bytes.decode(i).strip() and not bytes.decode(i).startswith('TOPIC'):
                     line = [j for j in bytes.decode(i).strip().split(' ') if j]
-                    log.info(line)
+                    logger.info(line)
                     try:
                         if int(line[4]) > int(KAFKA_QUEUE_SIZE):
-                            log.info('consumer:%s, topic:%s, partition:%s, current-offset:%s, log-end-offset:%s, lag:%s'
+                            logger.info('consumer:%s, topic:%s, partition:%s, current-offset:%s, logger-end-offset:%s, lag:%s'
                                      % (consumer, line[0], line[1], line[2], line[3], line[4]))
                             msg = u'阿里云消费者: %s，kafka topic: %s， partition: %s，待消费%s条' % (
                                 consumer, line[0], line[1], line[4])
@@ -54,12 +55,12 @@ class RedisKafkaMonitor(object):
     def redis_monitor(self):
         r = get_redis()
         nodecount = r.info()['nodecount']
-        log.info(nodecount)
+        logger.info(nodecount)
         # for k,v in r.info().items():
-        #  log.info(u'%s %s' %(k,v))
+        #  logger.info(u'%s %s' %(k,v))
         keyspace_info = r.info('keyspace')
         for db in keyspace_info:
-            log.info('check %s %s' % (db, keyspace_info[db]))
+            logger.info('check %s %s' % (db, keyspace_info[db]))
             if nodecount > 1:
                 self.find_big_key_sharding(db.replace('db', ''), nodecount)
             else:
@@ -84,7 +85,7 @@ class RedisKafkaMonitor(object):
         # redis大于100万keys
         if length > REDIS_QUEUE_SIZE:
             mes = u'阿里云Redis: %s，%s，%s，%s' % (db_num, k, type, length)
-            log.info(mes)
+            logger.info(mes)
             send_msg(SEND_USERS, mes)
 
     def find_big_key_normal(self, db_num):
@@ -102,7 +103,7 @@ class RedisKafkaMonitor(object):
                 for k in iscan[1]:
                     self._check_big_key(db_num, r, k)
                 cursor = iscan[0]
-                log.info(u'%s %s %s %s' %
+                logger.info(u'%s %s %s %s' %
                          (cursor, db_num, node, len(iscan[1])))
                 if cursor == '0':
                     break
